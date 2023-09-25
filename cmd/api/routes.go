@@ -8,6 +8,7 @@ import (
 
 func (app *appConfig) routes() http.Handler {
 	mux := chi.NewRouter()
+	mux.Use(app.enableCors)
 	mux.Get("/", app.home)
 	return mux
 }
