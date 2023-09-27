@@ -1,6 +1,13 @@
 package main
 
-import "net/http"
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
+)
 
 func (app *appConfig) enableCors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -13,5 +20,37 @@ func (app *appConfig) enableCors(next http.Handler) http.Handler {
 		} else {
 			next.ServeHTTP(w, r)
 		}
+	})
+}
+
+type UserClaim struct {
+	jwt.RegisteredClaims
+	Email string `json:"email"`
+	Utype  string `json:"utype"`
+}
+
+func (app *appConfig) protect(next func (w http.ResponseWriter, r *http.Request)) http.HandlerFunc {
+	return http.HandlerFunc(func (w http.ResponseWriter, r *http.Request){
+		authHeader := strings.Split(r.Header.Get("Authorization"), "Bearer ")
+		if len(authHeader) != 2 {
+			app.errorJSON(w, errors.New("Unauthorized, login or signup again"), http.StatusUnauthorized)
+			return
+		}
+		jwtToken := authHeader[1]
+		var claims UserClaim 
+		token ,err := jwt.ParseWithClaims(jwtToken,claims , func(token *jwt.Token) (interface{}, error) {
+			return []byte("secret"), nil
+		})
+		if err != nil {
+			app.errorJSON(w, err, http.StatusUnauthorized)
+			return 
+		}
+
+		if !token.Valid {
+			app.errorJSON(w, errors.New("please login again"), http.StatusUnauthorized)
+			return
+		}
+		fmt.Println(claims)
+		next(w,r)
 	})
 }

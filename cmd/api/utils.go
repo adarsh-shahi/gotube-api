@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type jsonResponse struct {
 	Error   bool        `json:"error"`
-	Message string      `json:"message"`
+	Message string      `json:"message,omitempty"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
@@ -29,6 +31,7 @@ func (app *appConfig) writeJSON(w http.ResponseWriter, status int, data interfac
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
+
 	_, err = w.Write(out)
 	if err != nil {
 		return err, http.StatusInternalServerError
@@ -82,4 +85,21 @@ func (app *appConfig) errorJSON(w http.ResponseWriter, err error, status ...int)
 		Message: err.Error(),
 	}
 	return app.writeJSON(w, statusCode, resopnse)
+}
+
+func (app *appConfig) generateToken(payload ...map[string]string) (string, error){
+	t := jwt.New(jwt.SigningMethodHS256)
+	claims := t.Claims.(jwt.MapClaims)
+	claims["exp"] = time.Now().Add(24 * 30 * time.Hour)
+
+	if len(payload) > 0 {
+		for k, v := range payload[0] {
+			claims[k] = v
+		}
+		}
+	tokenString, err := t.SignedString([]byte("secret"))
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/adarsh-shahi/gotube-api/internals/db"
 )
@@ -33,7 +34,7 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("connected to database....")
-	app.DB = &db.PostgreDB{PDB: conn}
+	app.DB = &db.PostgreDB{PDB: conn, DbTimeout: 3 * time.Second}
 	defer app.DB.Connection().Close()
 
 	log.Println("Listening on port ", app.port)
