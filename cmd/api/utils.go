@@ -90,7 +90,7 @@ func (app *appConfig) errorJSON(w http.ResponseWriter, err error, status ...int)
 
 func (app *appConfig) generateToken(payload db.TIdGmailPassword) (string, error){
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": payload.Id,
+		"id": payload.Id,
 		"utype": "user",
 		"email": payload.Email,
 		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
@@ -102,3 +102,4 @@ func (app *appConfig) generateToken(payload db.TIdGmailPassword) (string, error)
 	}
 	return tokenString, nil
 }
+

@@ -24,11 +24,11 @@ func (app *appConfig) enableCors(next http.Handler) http.Handler {
 	})
 }
 
-type UserClaim struct {
-	jwt.RegisteredClaims
+type ParsedUserData struct {
 	Email string `json:"email"`
-	Utype  string `json:"utype"`
+	Id int `json:"id"`
 }
+var parsedUserData ParsedUserData
 
 func (app *appConfig) protect(next func (w http.ResponseWriter, r *http.Request)) http.HandlerFunc {
 	return http.HandlerFunc(func (w http.ResponseWriter, r *http.Request){
@@ -48,7 +48,8 @@ func (app *appConfig) protect(next func (w http.ResponseWriter, r *http.Request)
 			if float64(time.Now().Unix()) > claims["exp"].(float64){
 				app.errorJSON(w, errors.New("session expired please login again"), http.StatusUnauthorized)
 			}
-			fmt.Println(claims)
+			parsedUserData.Email = claims["email"].(string)
+			parsedUserData.Id = int(claims["id"].(float64))
 		}
 		if err != nil {
 			app.errorJSON(w, err, http.StatusUnauthorized)

@@ -41,3 +41,22 @@ func (app *appConfig) login(w http.ResponseWriter, r *http.Request) {
 
 	app.writeJSON(w, http.StatusAccepted, jsonResponse)
 }
+
+
+func (app *appConfig) sendInvite(w http.ResponseWriter, r *http.Request){
+	user := struct{
+		Email string `json:"email"`
+	}{}
+
+
+
+	err, statusCode := app.readJSON(w, r, &user)
+	if err != nil {
+		app.errorJSON(w, err, statusCode)
+	}
+
+	
+
+
+
+}
