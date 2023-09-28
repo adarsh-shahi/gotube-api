@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/adarsh-shahi/gotube-api/internals/db"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -87,16 +88,14 @@ func (app *appConfig) errorJSON(w http.ResponseWriter, err error, status ...int)
 	return app.writeJSON(w, statusCode, resopnse)
 }
 
-func (app *appConfig) generateToken(payload ...map[string]string) (string, error){
-	t := jwt.New(jwt.SigningMethodHS256)
-	claims := t.Claims.(jwt.MapClaims)
-	claims["exp"] = time.Now().Add(24 * 30 * time.Hour)
+func (app *appConfig) generateToken(payload db.TIdGmailPassword) (string, error){
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": payload.Id,
+		"utype": "user",
+		"email": payload.Email,
+		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
+	})
 
-	if len(payload) > 0 {
-		for k, v := range payload[0] {
-			claims[k] = v
-		}
-		}
 	tokenString, err := t.SignedString([]byte("secret"))
 	if err != nil {
 		return "", err

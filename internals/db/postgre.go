@@ -16,23 +16,25 @@ func (pDB *PostgreDB) Connection() *sql.DB {
 	return pDB.PDB
 }
 
-type TGmailPassword struct {
+type TIdGmailPassword struct {
+	Id int `json:"id"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-func (pDB *PostgreDB) GetEmailPasswordUser(user TGmailPassword) (*TGmailPassword, error) {
+func (pDB *PostgreDB) GetIdEmailPasswordUser(user TIdGmailPassword) (*TIdGmailPassword, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), pDB.DbTimeout)
 	defer cancel()
 
 	query := `
-	select email, password from users where email = $1 AND password = $2
+	select id, email, password from users where email = $1 AND password = $2
 	`
 	row := pDB.PDB.QueryRowContext(ctx, query, user.Email, user.Password)
 
-	u := TGmailPassword{}
+	u := TIdGmailPassword{}
 
 	err := row.Scan(
+		&u.Id,
 		&u.Email,
 		&u.Password,
 	)

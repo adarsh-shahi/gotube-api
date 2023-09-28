@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -37,20 +38,22 @@ func (app *appConfig) protect(next func (w http.ResponseWriter, r *http.Request)
 			return
 		}
 		jwtToken := authHeader[1]
-		var claims UserClaim 
-		token ,err := jwt.ParseWithClaims(jwtToken,claims , func(token *jwt.Token) (interface{}, error) {
+		token ,err := jwt.Parse(jwtToken, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header)
+			}
 			return []byte("secret"), nil
 		})
+		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid{
+			if float64(time.Now().Unix()) > claims["exp"].(float64){
+				app.errorJSON(w, errors.New("session expired please login again"), http.StatusUnauthorized)
+			}
+			fmt.Println(claims)
+		}
 		if err != nil {
 			app.errorJSON(w, err, http.StatusUnauthorized)
 			return 
 		}
-
-		if !token.Valid {
-			app.errorJSON(w, errors.New("please login again"), http.StatusUnauthorized)
-			return
-		}
-		fmt.Println(claims)
 		next(w,r)
 	})
 }

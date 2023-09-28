@@ -8,40 +8,23 @@ import (
 )
 
 func (app *appConfig) home(w http.ResponseWriter, r *http.Request) {
-	user := ""
-	app.DB.PDB.QueryRow("select password from users where id = 1;").Scan(&user)
-
-	log.Println(user)
-	data := struct {
-		Name string `json:"name"`
-		Age  int    `json:"age"`
-	}{}
-	err, statusCode := app.readJSON(w, r, &data)
-	if err != nil {
-		app.errorJSON(w, err, statusCode)
-		return
-	}
-	app.writeJSON(w, http.StatusAccepted, data)
+	app.writeJSON(w, http.StatusAccepted, "i did it")
 }
 
 func (app *appConfig) login(w http.ResponseWriter, r *http.Request) {
-	userToFind := db.TGmailPassword{}
+	userToFind := db.TIdGmailPassword{}
 	err, statusCode := app.readJSON(w, r, &userToFind)
 	if err != nil {
 		app.errorJSON(w, err, statusCode)
 	}
-	user, err := app.DB.GetEmailPasswordUser(userToFind)
+	user, err := app.DB.GetIdEmailPasswordUser(userToFind)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusNotFound)
 		return
 	}
 
-	tokenClaims := map[string]string{
-		"email": user.Email,
-		"Utype": "user",
-	}
 
-	token, err := app.generateToken(tokenClaims)
+	token, err := app.generateToken(*user)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
 		return
