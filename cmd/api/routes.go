@@ -11,6 +11,7 @@ func (app *appConfig) routes() http.Handler {
 	mux.Use(app.enableCors)
 	mux.Get("/", app.protect(app.home))
 	mux.Post("/login", app.login)
+	mux.Post("/signup", app.signup)
 	mux.Post("/invite", app.protect(app.sendInvite))
 	// mux.Get("/invite", app.invitations)
 	return mux

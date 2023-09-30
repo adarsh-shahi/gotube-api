@@ -88,7 +88,7 @@ func (app *appConfig) errorJSON(w http.ResponseWriter, err error, status ...int)
 	return app.writeJSON(w, statusCode, resopnse)
 }
 
-func (app *appConfig) generateToken(payload db.TIdGmailPassword) (string, error){
+func (app *appConfig) generateToken(payload db.TIdEmailPassword) (string, error){
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"id": payload.Id,
 		"utype": "user",
