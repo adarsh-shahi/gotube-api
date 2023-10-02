@@ -13,6 +13,8 @@ func (app *appConfig) routes() http.Handler {
 	mux.Post("/login", app.login)
 	mux.Post("/signup", app.signup)
 	mux.Post("/invite", app.protect(app.sendInvite))
-	// mux.Get("/invite", app.invitations)
+	mux.Delete("/invite", app.protect(app.deleteInvite))
+	mux.Put("/invite", app.protect(app.updateInviteRole))
+	mux.Get("/invite", app.protect(app.getInvites))
 	return mux
 }

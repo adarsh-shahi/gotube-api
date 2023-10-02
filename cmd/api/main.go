@@ -18,7 +18,7 @@ type appConfig struct {
 
 func main() {
 	app := appConfig{
-		port:          ":8000",
+		port:          ":8001",
 		jsonSizeLimit: 1024*1024 , // 1MB
 		dbConnectionCreds: fmt.Sprintf(
 			"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5",
@@ -38,5 +38,8 @@ func main() {
 	defer app.DB.Connection().Close()
 
 	log.Println("Listening on port ", app.port)
-	http.ListenAndServe(app.port, app.routes())
+	err = http.ListenAndServe(app.port, app.routes())
+	if err != nil {
+		log.Println(err)
+	}
 }

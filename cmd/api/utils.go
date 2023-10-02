@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -19,6 +20,8 @@ type jsonResponse struct {
 }
 
 func (app *appConfig) writeJSON(w http.ResponseWriter, status int, data interface{}, headers ...http.Header) (error, int) {
+	log.Println("in write json")
+	log.Println(data)
 	out, err := json.Marshal(data)
 	if err != nil {
 		return err, http.StatusInternalServerError
@@ -91,7 +94,7 @@ func (app *appConfig) errorJSON(w http.ResponseWriter, err error, status ...int)
 func (app *appConfig) generateToken(payload db.TIdEmailPassword) (string, error){
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"id": payload.Id,
-		"utype": "user",
+		"utype": payload.UType,
 		"email": payload.Email,
 		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
 	})
