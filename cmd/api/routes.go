@@ -16,5 +16,8 @@ func (app *appConfig) routes() http.Handler {
 	mux.Delete("/invite", app.protect(app.deleteInvite))
 	mux.Put("/invite", app.protect(app.updateInviteRole))
 	mux.Get("/invite", app.protect(app.getInvites))
+	mux.Get("/geturl", app.protect(app.getSignedUrl))
+	mux.Get("/puturl", app.protect(app.putSignedUrl))
+	mux.Post("/video", app.uploadVideo)
 	return mux
 }

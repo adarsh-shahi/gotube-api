@@ -2,16 +2,23 @@ package main
 
 import (
 	"errors"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/adarsh-shahi/gotube-api/internals/db"
+	"github.com/aws/aws-sdk-go/aws"
+    "github.com/aws/aws-sdk-go/aws/session"
+    "github.com/aws/aws-sdk-go/service/s3"
+    "github.com/aws/aws-sdk-go/aws/credentials"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func (app *appConfig) home(w http.ResponseWriter, r *http.Request) {
 	log.Println("in home")
-	log.Println(parsedUserData)
 	app.writeJSON(w, http.StatusAccepted, "i did it")
 }
 
@@ -224,7 +231,7 @@ func (app *appConfig) getInvites(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if parsedUserData.UType == "owner" {
 		response.Message = "sent"
-		list, err = app.DB.GetAllInvites(parsedUserData.Id, "owner",)
+		list, err = app.DB.GetAllInvites(parsedUserData.Id, "owner")
 	} else {
 		response.Message = "received"
 		list, err = app.DB.GetAllInvites(parsedUserData.Id, "user")
@@ -236,4 +243,67 @@ func (app *appConfig) getInvites(w http.ResponseWriter, r *http.Request) {
 	response.Error = false
 	response.Data = list
 	app.writeJSON(w, http.StatusOK, response)
+}
+
+func (app *appConfig) uploadVideo(w http.ResponseWriter, r *http.Request) {
+	file, handler, err := r.FormFile("image")
+	if err != nil {
+		app.errorJSON(w, errors.New("error retrieving the file"), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	extension := filepath.Ext(handler.Filename)
+	newFileName := "uploaded_image" + extension
+
+	outputFile, err := os.Create(newFileName)
+	if err != nil {
+		app.errorJSON(w, errors.New("error creating the file"), http.StatusBadRequest)
+		return
+	}
+	defer outputFile.Close()
+
+	_, err = io.Copy(outputFile, file)
+	if err != nil {
+		app.errorJSON(w, errors.New("error copying the file"), http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte("hello there"))
+}
+
+func (app *appConfig) getSignedUrl(w http.ResponseWriter, r *http.Request) {
+
+	creds := credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"),os.Getenv("AWS_SECRET_ACCESS_KEY") , "")
+
+	cfg := aws.NewConfig().WithRegion(os.Getenv("AWS_REGION")).WithCredentials(creds)
+
+	sess, err := session.NewSession(cfg)
+
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	svc := s3.New(sess)
+
+	req, _ := svc.GetObjectRequest(&s3.GetObjectInput{
+		Bucket: aws.String("gotube.adarsh"),
+		Key:    aws.String("memes/setup.jpg"),
+	})
+
+	urlStr, err := req.Presign(1 * time.Minute)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	response := jsonResponse{
+		Error: false,
+		Data:  urlStr,
+	}
+
+	app.writeJSON(w, http.StatusAccepted, response)
+}
+
+func (app *appConfig) putSignedUrl(w http.ResponseWriter, r *http.Request) {
 }

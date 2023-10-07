@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
@@ -20,8 +19,6 @@ type jsonResponse struct {
 }
 
 func (app *appConfig) writeJSON(w http.ResponseWriter, status int, data interface{}, headers ...http.Header) (error, int) {
-	log.Println("in write json")
-	log.Println(data)
 	out, err := json.Marshal(data)
 	if err != nil {
 		return err, http.StatusInternalServerError

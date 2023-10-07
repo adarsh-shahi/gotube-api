@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/adarsh-shahi/gotube-api/internals/db"
 )
 
@@ -17,6 +18,11 @@ type appConfig struct {
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+	
 	app := appConfig{
 		port:          ":8001",
 		jsonSizeLimit: 1024*1024 , // 1MB
