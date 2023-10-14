@@ -1,25 +1,185 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/adarsh-shahi/gotube-api/internals/db"
+	"github.com/adarsh-shahi/gotube-api/internals/youtube"
 	"github.com/aws/aws-sdk-go/aws"
-    "github.com/aws/aws-sdk-go/aws/session"
-    "github.com/aws/aws-sdk-go/service/s3"
-    "github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func (app *appConfig) home(w http.ResponseWriter, r *http.Request) {
 	log.Println("in home")
 	app.writeJSON(w, http.StatusAccepted, "i did it")
+}
+
+func (app *appConfig) authYoutube(w http.ResponseWriter, r *http.Request){
+
+}
+
+func (app *appConfig) signupOauth(w http.ResponseWriter, r *http.Request){
+	userType := r.URL.Query()["state"][0]
+	if userType == "owner" {
+		app.addCreator(w, r)
+	} else if userType == "user" {
+		app.addUser(w, r)
+	}
+}
+
+func (app *appConfig) addCreator(w http.ResponseWriter, r *http.Request){
+	code := r.URL.Query()["code"][0]
+	urlString := fmt.Sprintf("https://oauth2.googleapis.com/token?code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&grant_type=%s",code,os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URI"), "authorization_code")
+
+	resp, err := http.Post(urlString, "application/x-www-form-urlencoding", bytes.NewBuffer([]byte("")))
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+	}
+	defer resp.Body.Close()
+	response := map[string]interface{}{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	fmt.Println(response)
+	access_token := response["access_token"].(string)
+	id_token := response["id_token"].(string)
+	refresh_token := response["refresh_token"].(string)
+
+	client := &http.Client{}
+	req, _ := http.NewRequest("GET" , "https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token="+access_token,nil )
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", id_token))
+	respUser, err := client.Do(req)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return 
+	}
+	defer respUser.Body.Close()
+	googleUser := map[string]interface{}{}
+	json.NewDecoder(respUser.Body).Decode(&googleUser)
+	email := googleUser["email"].(string)
+	ch, err := youtube.GetChannelInfo(access_token)
+	addOwner := db.AddOwner{
+		Channel: youtube.Channel{
+			Title: ch.Title,
+			Description: ch.Description,
+			CustomUrl: ch.CustomUrl,
+			ProfileImageUrl: ch.ProfileImageUrl,
+		},
+		Email: email,
+	}
+	err = app.DB.AddOwner(addOwner)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+	}
+	token, err := app.generateToken(email, "owner")
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	responseData := jsonResponse{
+		Error: false,
+		Message: "user created",
+		Data: struct {
+			JwtToken string `json:"jwtToken"`
+			RefreshToken string `json:"refreshToken"`
+			UType string `json:"uType"`
+			Email string `json:"email"`
+		}{
+			JwtToken: token,
+			RefreshToken: refresh_token,
+			UType: "owner",
+			Email: email,
+		},
+	}
+
+	byteData, err := json.Marshal(responseData)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	params := url.Values{}
+	params.Add("jsonData", string(byteData))
+	http.Redirect(w, r, "http://localhost:3000/auth?"+params.Encode(), http.StatusSeeOther)
+}
+
+func (app *appConfig) addUser(w http.ResponseWriter, r *http.Request){
+	code := r.URL.Query()["code"][0]
+	urlString := fmt.Sprintf("https://oauth2.googleapis.com/token?code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&grant_type=%s",code,os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URI"), "authorization_code")
+
+	resp, err := http.Post(urlString, "application/x-www-form-urlencoding", bytes.NewBuffer([]byte("")))
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+	}
+	defer resp.Body.Close()
+	response := map[string]interface{}{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	fmt.Println(response)
+	access_token := response["access_token"].(string)
+	id_token := response["id_token"].(string)
+	refresh_token := response["refresh_token"].(string)
+
+	client := &http.Client{}
+	req, _ := http.NewRequest("GET" , "https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token="+access_token,nil )
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", id_token))
+	respUser, err := client.Do(req)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return 
+	}
+	defer respUser.Body.Close()
+	googleUser := map[string]interface{}{}
+	json.NewDecoder(respUser.Body).Decode(&googleUser)
+	email := googleUser["email"].(string)
+	user := db.AddUser{
+		Email: email,
+	}
+	err = app.DB.AddUser(user)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	token, err := app.generateToken(email, "user")
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	responseData := jsonResponse{
+		Error: false,
+		Message: "user created",
+		Data: struct {
+			JwtToken string `json:"jwtToken"`
+			RefreshToken string `json:"refreshToken"`
+			UType string `json:"uType"`
+			Email string `json:"email"`
+		}{
+			JwtToken: token,
+			RefreshToken: refresh_token,
+			UType: "user",
+			Email: email,
+		},
+	}
+	byteData, err := json.Marshal(responseData)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	params := url.Values{}
+	params.Add("jsonData", string(byteData))
+	http.Redirect(w, r, "http://localhost:3000/auth?"+params.Encode(), http.StatusSeeOther)
 }
 
 func (app *appConfig) login(w http.ResponseWriter, r *http.Request) {
@@ -46,11 +206,11 @@ func (app *appConfig) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := app.generateToken(*user)
-	if err != nil {
-		app.errorJSON(w, err, http.StatusInternalServerError)
-		return
-	}
+	// token, err := app.generateToken(*user)
+	// if err != nil {
+	// 	app.errorJSON(w, err, http.StatusInternalServerError)
+	// 	return
+	// }
 
 	log.Println(user)
 	jsonResponse := jsonResponse{
@@ -58,7 +218,8 @@ func (app *appConfig) login(w http.ResponseWriter, r *http.Request) {
 		Message: "loggedIn successfully",
 		Data: struct {
 			Token string `json:"token"`
-		}{Token: token},
+			UType string `json:"utype"`
+		}{Token: "", UType: userToFind.UType},
 	}
 
 	app.writeJSON(w, http.StatusAccepted, jsonResponse)
@@ -229,6 +390,7 @@ func (app *appConfig) getInvites(w http.ResponseWriter, r *http.Request) {
 	list := []db.Invites{}
 	response := jsonResponse{}
 	var err error
+	fmt.Println(parsedUserData)
 	if parsedUserData.UType == "owner" {
 		response.Message = "sent"
 		list, err = app.DB.GetAllInvites(parsedUserData.Id, "owner")
@@ -243,6 +405,32 @@ func (app *appConfig) getInvites(w http.ResponseWriter, r *http.Request) {
 	response.Error = false
 	response.Data = list
 	app.writeJSON(w, http.StatusOK, response)
+}
+
+func (app *appConfig) addContent(w http.ResponseWriter, r *http.Request) {
+	content := struct{
+		Name string `json:"name"`
+	}{}
+	err, statusCode := app.readJSON(w, r, &content)
+
+	if err != nil {
+		app.errorJSON(w, err, statusCode)
+		return
+	}
+	log.Println(content)
+
+	err = app.DB.AddContent(content.Name)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "added"})
+}
+
+func (app *appConfig) getContent (w http.ResponseWriter, r *http.Request){
+
+
 }
 
 func (app *appConfig) uploadVideo(w http.ResponseWriter, r *http.Request) {
@@ -272,13 +460,11 @@ func (app *appConfig) uploadVideo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *appConfig) getSignedUrl(w http.ResponseWriter, r *http.Request) {
-
-	creds := credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"),os.Getenv("AWS_SECRET_ACCESS_KEY") , "")
+	creds := credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), "")
 
 	cfg := aws.NewConfig().WithRegion(os.Getenv("AWS_REGION")).WithCredentials(creds)
 
 	sess, err := session.NewSession(cfg)
-
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
 		return
@@ -306,4 +492,33 @@ func (app *appConfig) getSignedUrl(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *appConfig) putSignedUrl(w http.ResponseWriter, r *http.Request) {
+	creds := credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), "")
+
+	cfg := aws.NewConfig().WithRegion(os.Getenv("AWS_REGION")).WithCredentials(creds)
+
+	sess, err := session.NewSession(cfg)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	svc := s3.New(sess)
+
+	req, _ := svc.PutObjectRequest(&s3.PutObjectInput{
+		Bucket: aws.String("gotube.adarsh"),
+		Key:    aws.String("cycle/ok.jpg"),
+	})
+
+	urlStr, err := req.Presign(2 * time.Minute)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	response := jsonResponse{
+		Error: false,
+		Data:  urlStr,
+	}
+
+	app.writeJSON(w, http.StatusAccepted, response)
 }

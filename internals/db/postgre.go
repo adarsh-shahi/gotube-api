@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/adarsh-shahi/gotube-api/internals/youtube"
 )
 
 type PostgreDB struct {
@@ -63,23 +65,37 @@ func (pDB *PostgreDB) GetIdEmailPasswordUser(user TIdEmailPassword) (*TIdEmailPa
 type AddUser struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
-	UType    string `json:"utype"`
 }
 
-func (pDB *PostgreDB) AddUser(user AddUser) error {
-	var table string
-	if user.UType == "owner" {
-		table = "owners"
-	} else {
-		table = "users"
-	}
-	query := fmt.Sprintf("insert into %s(email, password) values('%s', '%s')", table, user.Email, user.Password)
-	fmt.Println(query)
-	result, err := pDB.PDB.ExecContext(context.Background(), query)
+type AddOwner struct {
+	youtube.Channel
+	Email    string `json:"email"`
+}
+
+func (pDB *PostgreDB) AddOwner(owner AddOwner) error {
+	query := fmt.Sprintf("insert into owners(email, channelName, channelUrl, profileImage, description) values ('%s','%s','%s','%s','%s')", owner.Email, owner.Title, owner.CustomUrl, owner.ProfileImageUrl, owner.Description)
+	_, err := pDB.PDB.ExecContext(context.Background(), query)
 	if err != nil {
 		return err
 	}
-	fmt.Println(result)
+	return nil
+}
+
+func (pDB *PostgreDB) AddUser(user AddUser) error {
+	query := fmt.Sprintf("insert into users(email) values('%s')", user.Email)
+	_, err := pDB.PDB.ExecContext(context.Background(), query)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (pDB *PostgreDB) AddUserWithPassowrd(user AddUser) error {
+	query := fmt.Sprintf("insert into users(email, password) values('%s', '%s')", user.Email, user.Password)
+	_, err := pDB.PDB.ExecContext(context.Background(), query)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -183,4 +199,19 @@ func (pDB *PostgreDB) GetAllInvites(id int, utype string) ([]Invites, error) {
 	}
 	fmt.Println(list)
 	return list, nil
+}
+
+type content struct{
+	Id int 
+	update_at string
+	// contentName
+}
+
+func (pDB *PostgreDB) AddContent(name string) error {
+	query := fmt.Sprintf(`insert into contents(contentname) values('%s')`, name) 
+	_, err := pDB.PDB.ExecContext(context.Background(), query)
+	if err != nil {
+		return err
+	}
+	return nil
 }

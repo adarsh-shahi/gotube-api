@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/adarsh-shahi/gotube-api/internals/db"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -62,7 +62,7 @@ func (app *appConfig) readJSON(w http.ResponseWriter, r *http.Request, data inte
 		case errors.Is(err, io.EOF):
 			return errors.New("Request body must not be empty"), http.StatusBadRequest
 
-		default: return errors.New("check the json data passed or contact the backend dev"), http.StatusInternalServerError
+		default: return err, http.StatusInternalServerError
 		}
 	}
 
@@ -88,11 +88,10 @@ func (app *appConfig) errorJSON(w http.ResponseWriter, err error, status ...int)
 	return app.writeJSON(w, statusCode, resopnse)
 }
 
-func (app *appConfig) generateToken(payload db.TIdEmailPassword) (string, error){
+func (app *appConfig) generateToken(email, utype string) (string, error){
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id": payload.Id,
-		"utype": payload.UType,
-		"email": payload.Email,
+		"utype": utype,
+		"email": email,
 		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
 	})
 
@@ -103,3 +102,18 @@ func (app *appConfig) generateToken(payload db.TIdEmailPassword) (string, error)
 	return tokenString, nil
 }
 
+func (app *appConfig) generateAccessTokenYT(refreshToken string) (string, error){
+	url := `https://www.googleapis.com/oauth2/v4/token`
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer([]byte("")))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	response := map[string]interface{}{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	accessToken, isPresent := response["access_token"]
+	if !isPresent {
+		return "", errors.New("cannot find access_token key in resposne")
+	}
+	return accessToken.(string), nil
+}
