@@ -78,11 +78,11 @@ func (app *appConfig) addCreator(w http.ResponseWriter, r *http.Request){
 		},
 		Email: email,
 	}
-	err = app.DB.AddOwner(addOwner)
+	id, err := app.DB.AddOwner(addOwner)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
 	}
-	token, err := app.generateToken(email, "owner")
+	token, err := app.generateToken(email, "owner", id)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
 		return
@@ -145,13 +145,12 @@ func (app *appConfig) addUser(w http.ResponseWriter, r *http.Request){
 	user := db.AddUser{
 		Email: email,
 	}
-	err = app.DB.AddUser(user)
+	id, err := app.DB.AddUser(user)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
 		return
 	}
-
-	token, err := app.generateToken(email, "user")
+	token, err := app.generateToken(email, "user", id)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
 		return
@@ -189,7 +188,7 @@ func (app *appConfig) login(w http.ResponseWriter, r *http.Request) {
 		app.errorJSON(w, err, statusCode)
 		return
 	}
-	user, err := app.DB.GetIdEmailPasswordUser(userToFind)
+	user, err := app.DB.GetIdEmailUser(userToFind)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusNotFound)
 		return
@@ -267,7 +266,7 @@ func (app *appConfig) sendInvite(w http.ResponseWriter, r *http.Request) {
 	if userToFind.Role == "" {
 		userToFind.Role = "viewer"
 	}
-	user, err := app.DB.GetIdEmailPasswordUser(userToFind)
+	user, err := app.DB.GetIdEmailUser(userToFind)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusNotFound)
 		return
@@ -304,7 +303,7 @@ func (app *appConfig) updateInviteRole(w http.ResponseWriter, r *http.Request) {
 		Role:  editUserRole.Role,
 	}
 
-	user, err := app.DB.GetIdEmailPasswordUser(userToFind)
+	user, err := app.DB.GetIdEmailUser(userToFind)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusNotFound)
 		return
@@ -339,7 +338,7 @@ func (app *appConfig) deleteInvite(w http.ResponseWriter, r *http.Request) {
 			UType: "owner",
 		}
 		log.Println(ownerToFind)
-		owner, err := app.DB.GetIdEmailPasswordUser(ownerToFind)
+		owner, err := app.DB.GetIdEmailUser(ownerToFind)
 		if err != nil {
 			app.errorJSON(w, err, http.StatusBadRequest)
 			return
@@ -372,7 +371,7 @@ func (app *appConfig) deleteInvite(w http.ResponseWriter, r *http.Request) {
 		userToFind := db.TIdEmailPassword{
 			Email: response.Email,
 		}
-		user, err := app.DB.GetIdEmailPasswordUser(userToFind)
+		user, err := app.DB.GetIdEmailUser(userToFind)
 		if err != nil {
 			app.errorJSON(w, err, http.StatusBadRequest)
 			return
@@ -394,9 +393,22 @@ func (app *appConfig) getInvites(w http.ResponseWriter, r *http.Request) {
 	if parsedUserData.UType == "owner" {
 		response.Message = "sent"
 		list, err = app.DB.GetAllInvites(parsedUserData.Id, "owner")
+		fmt.Println("-----------------")
+		fmt.Println("-----------------")
+		fmt.Println(list)
+		fmt.Println("-----------------")
+		fmt.Println("-----------------")
+		if err != nil {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
 	} else {
 		response.Message = "received"
 		list, err = app.DB.GetAllInvites(parsedUserData.Id, "user")
+		if err != nil {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
 	}
 	if err != nil {
 		app.errorJSON(w, err, http.StatusBadRequest)
@@ -521,4 +533,22 @@ func (app *appConfig) putSignedUrl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.writeJSON(w, http.StatusAccepted, response)
+}
+
+func (app *appConfig) getProfile(w http.ResponseWriter, r *http.Request){
+	if parsedUserData.UType == "owner"{
+		user, err := app.DB.GetOwnerProfile(parsedUserData.Email)
+		fmt.Println("-------------------")
+		fmt.Println(user)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
+		response := jsonResponse{
+			Error: false,
+			Message: "success",
+			Data: user,
+		}
+		app.writeJSON(w, http.StatusOK, response)
+	}
 }

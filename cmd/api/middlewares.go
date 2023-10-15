@@ -26,7 +26,7 @@ func (app *appConfig) enableCors(next http.Handler) http.Handler {
 
 type ParsedUserData struct {
 	Email string `json:"email"`
-	Id int `json:"id"`
+	Id int64 `json:"id"`
 	UType string `json:"utype"`
 }
 var parsedUserData ParsedUserData
@@ -56,8 +56,8 @@ func (app *appConfig) protect(next func (w http.ResponseWriter, r *http.Request)
 				app.errorJSON(w, errors.New("session expired please login again"), http.StatusUnauthorized)
 			}
 			parsedUserData.Email = claims["email"].(string)
-			parsedUserData.Id = int(claims["id"].(float64))
 			parsedUserData.UType = claims["utype"].(string)
+			parsedUserData.Id = int64(claims["id"].(float64)) 
 		}
 		if err != nil {
 			app.errorJSON(w, err, http.StatusUnauthorized)

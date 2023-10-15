@@ -25,5 +25,6 @@ func (app *appConfig) routes() http.Handler {
 	// mux.Delete("/content", app.protect(app.deleteContent))
 	mux.Get("/geturl", app.protect(app.getSignedUrl))
 	mux.Get("/puturl", app.protect(app.putSignedUrl))
+	mux.Get("/profile", app.protect(app.getProfile))
 	return mux
 }

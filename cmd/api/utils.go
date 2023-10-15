@@ -88,9 +88,10 @@ func (app *appConfig) errorJSON(w http.ResponseWriter, err error, status ...int)
 	return app.writeJSON(w, statusCode, resopnse)
 }
 
-func (app *appConfig) generateToken(email, utype string) (string, error){
+func (app *appConfig) generateToken(email, utype string, id int64) (string, error){
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"utype": utype,
+		"id": id,
 		"email": email,
 		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
 	})

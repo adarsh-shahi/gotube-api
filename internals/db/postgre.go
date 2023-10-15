@@ -21,14 +21,14 @@ func (pDB *PostgreDB) Connection() *sql.DB {
 }
 
 type TIdEmailPassword struct {
-	Id       int    `json:"id"`
+	Id       int64    `json:"id"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	UType    string `json:"utype"`
 	Role     string `json:"role"`
 }
 
-func (pDB *PostgreDB) GetIdEmailPasswordUser(user TIdEmailPassword) (*TIdEmailPassword, error) {
+func (pDB *PostgreDB) GetIdEmailUser(user TIdEmailPassword) (*TIdEmailPassword, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), pDB.DbTimeout)
 	defer cancel()
 
@@ -39,7 +39,7 @@ func (pDB *PostgreDB) GetIdEmailPasswordUser(user TIdEmailPassword) (*TIdEmailPa
 		table = "users"
 	}
 
-	query := fmt.Sprintf("select id, email, password from %s where email = '%s'", table, user.Email)
+	query := fmt.Sprintf("select id, email from %s where email = '%s'", table, user.Email)
 	row := pDB.PDB.QueryRowContext(ctx, query)
 
 	u := TIdEmailPassword{}
@@ -47,7 +47,6 @@ func (pDB *PostgreDB) GetIdEmailPasswordUser(user TIdEmailPassword) (*TIdEmailPa
 	err := row.Scan(
 		&u.Id,
 		&u.Email,
-		&u.Password,
 	)
 	u.UType = user.UType
 	u.Role = user.Role
@@ -69,25 +68,35 @@ type AddUser struct {
 
 type AddOwner struct {
 	youtube.Channel
-	Email    string `json:"email"`
+	Email string `json:"email"`
 }
 
-func (pDB *PostgreDB) AddOwner(owner AddOwner) error {
-	query := fmt.Sprintf("insert into owners(email, channelName, channelUrl, profileImage, description) values ('%s','%s','%s','%s','%s')", owner.Email, owner.Title, owner.CustomUrl, owner.ProfileImageUrl, owner.Description)
-	_, err := pDB.PDB.ExecContext(context.Background(), query)
+func (pDB *PostgreDB) AddOwner(owner AddOwner) (int64, error) {
+	var id int64
+	query := fmt.Sprintf(
+		"insert into owners(email, channelName, channelUrl, profileImage, description) values ('%s','%s','%s','%s','%s') RETURNING id",
+		owner.Email,
+		owner.Title,
+		owner.CustomUrl,
+		owner.ProfileImageUrl,
+		owner.Description,
+	)
+	err := pDB.PDB.QueryRowContext(context.Background(), query).Scan(&id)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return nil
+	return id, nil
+
 }
 
-func (pDB *PostgreDB) AddUser(user AddUser) error {
-	query := fmt.Sprintf("insert into users(email) values('%s')", user.Email)
-	_, err := pDB.PDB.ExecContext(context.Background(), query)
+func (pDB *PostgreDB) AddUser(user AddUser) (int64, error) {
+	var id int64
+	query := fmt.Sprintf("insert into users(email) values('%s') RETURNING id", user.Email)
+	err := pDB.PDB.QueryRowContext(context.Background(), query).Scan(&id)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return nil
+	return id, nil
 }
 
 func (pDB *PostgreDB) AddUserWithPassowrd(user AddUser) error {
@@ -99,7 +108,7 @@ func (pDB *PostgreDB) AddUserWithPassowrd(user AddUser) error {
 	return nil
 }
 
-func (pDB *PostgreDB) AddInvites(sender, receiver int, role string) error {
+func (pDB *PostgreDB) AddInvites(sender, receiver int64, role string) error {
 	query := fmt.Sprintf("insert into invites(sender, receiver, role) values(%d, %d, '%s')", sender, receiver, role)
 	_, err := pDB.PDB.ExecContext(context.Background(), query)
 	if err != nil {
@@ -108,7 +117,7 @@ func (pDB *PostgreDB) AddInvites(sender, receiver int, role string) error {
 	return nil
 }
 
-func (pDB *PostgreDB) UpdateInviteRole(sender, receiver int, role string) error {
+func (pDB *PostgreDB) UpdateInviteRole(sender, receiver int64, role string) error {
 	query := fmt.Sprintf("update invites set role = '%s' where sender = %d AND receiver = %d", role, sender, receiver)
 	_, err := pDB.PDB.ExecContext(context.Background(), query)
 	if err != nil {
@@ -117,7 +126,7 @@ func (pDB *PostgreDB) UpdateInviteRole(sender, receiver int, role string) error 
 	return nil
 }
 
-func (pDB *PostgreDB) DeleteInvite(sender, receiver int) error {
+func (pDB *PostgreDB) DeleteInvite(sender, receiver int64) error {
 	query := fmt.Sprintf("delete from invites where sender = %d AND receiver = %d", sender, receiver)
 	_, err := pDB.PDB.ExecContext(context.Background(), query)
 	if err != nil {
@@ -126,7 +135,7 @@ func (pDB *PostgreDB) DeleteInvite(sender, receiver int) error {
 	return nil
 }
 
-func (pDB *PostgreDB) DeleteInviteAndAddToTeam(sender, receiver int, role string) error {
+func (pDB *PostgreDB) DeleteInviteAndAddToTeam(sender, receiver int64, role string) error {
 	ctx := context.Background()
 	tx, err := pDB.PDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -173,18 +182,22 @@ func (pDB *PostgreDB) DeleteInviteAndAddToTeam(sender, receiver int, role string
 type Invites struct {
 	Email string `json:"email"`
 	Role  string `json:"role"`
+	ChannelName string `json:"channelName"`
 }
 
-func (pDB *PostgreDB) GetAllInvites(id int, utype string) ([]Invites, error) {
+func (pDB *PostgreDB) GetAllInvites(id int64, utype string) ([]Invites, error) {
 	var list []Invites
 	query := ""
 
 	if utype == "owner" {
 		// get all invites sent by the owner to his users (team)
-		query = fmt.Sprintf("select users.email, invites.role from invites inner join users on invites.receiver = users.id where invites.sender = %d", id)
+		query = fmt.Sprintf(
+			"select users.email, invites.role from invites inner join users on invites.receiver = users.id where invites.sender = %d",
+			id,
+		)
 	} else if utype == "user" {
-		// get all invitations sent by different owners to from specific user
-		query = fmt.Sprintf("select owners.email, invites.role from invites inner join owners on invites.sender = owners.id where invites.receiver = %d", id)
+		// get all invitations sent by different owners to  specific user
+		query = fmt.Sprintf("select owners.email, owners.channelname, invites.role from invites inner join owners on invites.sender = owners.id where invites.receiver = %d", id)
 	}
 
 	rows, err := pDB.PDB.QueryContext(context.Background(), query)
@@ -194,24 +207,57 @@ func (pDB *PostgreDB) GetAllInvites(id int, utype string) ([]Invites, error) {
 	}
 	for rows.Next() {
 		invite := Invites{}
-		rows.Scan(&invite.Email, &invite.Role)
+		if utype == "owner"{
+			rows.Scan(&invite.Email, &invite.Role)
+		} else if utype == "user"{
+			rows.Scan(&invite.Email, &invite.ChannelName, &invite.Role)
+		}
 		list = append(list, invite)
 	}
 	fmt.Println(list)
 	return list, nil
 }
 
-type content struct{
-	Id int 
+type content struct {
+	Id        int64
 	update_at string
 	// contentName
 }
 
 func (pDB *PostgreDB) AddContent(name string) error {
-	query := fmt.Sprintf(`insert into contents(contentname) values('%s')`, name) 
+	query := fmt.Sprintf(`insert into contents(contentname) values('%s')`, name)
 	_, err := pDB.PDB.ExecContext(context.Background(), query)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+type OwnerProfile struct {
+	ProfileImage string `json:"profileImage"`
+	Title        string `json:"title"`
+	ChannelUrl   string `json:"channelUrl"`
+	Description   string `json:"description"`
+}
+
+func (pDB *PostgreDB) GetOwnerProfile(email string) (*OwnerProfile, error) {
+	query := fmt.Sprintf("select channelname, channelurl, profileimage, description from owners where email = '%s'", email)
+	row := pDB.PDB.QueryRowContext(context.Background(), query)
+	u := &OwnerProfile{}
+
+	err := row.Scan(
+		&u.Title,
+		&u.ChannelUrl,
+		&u.ProfileImage,
+		&u.Description,
+	)
+	if err != nil {
+		switch err {
+		case sql.ErrNoRows:
+			return nil, errors.New("user not found")
+		default:
+			return nil, errors.New("something went wrong")
+		}
+	}
+	return u, nil
 }
