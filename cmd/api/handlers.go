@@ -27,11 +27,10 @@ func (app *appConfig) home(w http.ResponseWriter, r *http.Request) {
 	app.writeJSON(w, http.StatusAccepted, "i did it")
 }
 
-func (app *appConfig) authYoutube(w http.ResponseWriter, r *http.Request){
-
+func (app *appConfig) authYoutube(w http.ResponseWriter, r *http.Request) {
 }
 
-func (app *appConfig) signupOauth(w http.ResponseWriter, r *http.Request){
+func (app *appConfig) signupOauth(w http.ResponseWriter, r *http.Request) {
 	userType := r.URL.Query()["state"][0]
 	if userType == "owner" {
 		app.addCreator(w, r)
@@ -40,9 +39,16 @@ func (app *appConfig) signupOauth(w http.ResponseWriter, r *http.Request){
 	}
 }
 
-func (app *appConfig) addCreator(w http.ResponseWriter, r *http.Request){
+func (app *appConfig) addCreator(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query()["code"][0]
-	urlString := fmt.Sprintf("https://oauth2.googleapis.com/token?code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&grant_type=%s",code,os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URI"), "authorization_code")
+	urlString := fmt.Sprintf(
+		"https://oauth2.googleapis.com/token?code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&grant_type=%s",
+		code,
+		os.Getenv("GOOGLE_CLIENT_ID"),
+		os.Getenv("GOOGLE_CLIENT_SECRET"),
+		os.Getenv("GOOGLE_REDIRECT_URI"),
+		"authorization_code",
+	)
 
 	resp, err := http.Post(urlString, "application/x-www-form-urlencoding", bytes.NewBuffer([]byte("")))
 	if err != nil {
@@ -57,31 +63,40 @@ func (app *appConfig) addCreator(w http.ResponseWriter, r *http.Request){
 	refresh_token := response["refresh_token"].(string)
 
 	client := &http.Client{}
-	req, _ := http.NewRequest("GET" , "https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token="+access_token,nil )
+	req, _ := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token="+access_token, nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", id_token))
 	respUser, err := client.Do(req)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
-		return 
+		return
 	}
 	defer respUser.Body.Close()
 	googleUser := map[string]interface{}{}
 	json.NewDecoder(respUser.Body).Decode(&googleUser)
 	email := googleUser["email"].(string)
-	ch, err := youtube.GetChannelInfo(access_token)
-	addOwner := db.AddOwner{
-		Channel: youtube.Channel{
-			Title: ch.Title,
-			Description: ch.Description,
-			CustomUrl: ch.CustomUrl,
-			ProfileImageUrl: ch.ProfileImageUrl,
-		},
-		Email: email,
-	}
-	id, err := app.DB.AddOwner(addOwner)
+
+	isEmailThere, id, err := app.DB.GetEmailFromOwner(email)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
 	}
+	if !isEmailThere {
+		ch, err := youtube.GetChannelInfo(access_token)
+		addOwner := db.AddOwner{
+			Channel: youtube.Channel{
+				Title:           ch.Title,
+				Description:     ch.Description,
+				CustomUrl:       ch.CustomUrl,
+				ProfileImageUrl: ch.ProfileImageUrl,
+			},
+			Email: email,
+		}
+		id, err = app.DB.AddOwner(addOwner)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+		}
+	}
+
 	token, err := app.generateToken(email, "owner", id)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
@@ -89,18 +104,18 @@ func (app *appConfig) addCreator(w http.ResponseWriter, r *http.Request){
 	}
 
 	responseData := jsonResponse{
-		Error: false,
+		Error:   false,
 		Message: "user created",
 		Data: struct {
-			JwtToken string `json:"jwtToken"`
+			JwtToken     string `json:"jwtToken"`
 			RefreshToken string `json:"refreshToken"`
-			UType string `json:"uType"`
-			Email string `json:"email"`
+			UType        string `json:"uType"`
+			Email        string `json:"email"`
 		}{
-			JwtToken: token,
+			JwtToken:     token,
 			RefreshToken: refresh_token,
-			UType: "owner",
-			Email: email,
+			UType:        "owner",
+			Email:        email,
 		},
 	}
 
@@ -114,9 +129,16 @@ func (app *appConfig) addCreator(w http.ResponseWriter, r *http.Request){
 	http.Redirect(w, r, "http://localhost:3000/auth?"+params.Encode(), http.StatusSeeOther)
 }
 
-func (app *appConfig) addUser(w http.ResponseWriter, r *http.Request){
+func (app *appConfig) addUser(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query()["code"][0]
-	urlString := fmt.Sprintf("https://oauth2.googleapis.com/token?code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&grant_type=%s",code,os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URI"), "authorization_code")
+	urlString := fmt.Sprintf(
+		"https://oauth2.googleapis.com/token?code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&grant_type=%s",
+		code,
+		os.Getenv("GOOGLE_CLIENT_ID"),
+		os.Getenv("GOOGLE_CLIENT_SECRET"),
+		os.Getenv("GOOGLE_REDIRECT_URI"),
+		"authorization_code",
+	)
 
 	resp, err := http.Post(urlString, "application/x-www-form-urlencoding", bytes.NewBuffer([]byte("")))
 	if err != nil {
@@ -131,12 +153,12 @@ func (app *appConfig) addUser(w http.ResponseWriter, r *http.Request){
 	refresh_token := response["refresh_token"].(string)
 
 	client := &http.Client{}
-	req, _ := http.NewRequest("GET" , "https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token="+access_token,nil )
+	req, _ := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token="+access_token, nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", id_token))
 	respUser, err := client.Do(req)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
-		return 
+		return
 	}
 	defer respUser.Body.Close()
 	googleUser := map[string]interface{}{}
@@ -157,18 +179,18 @@ func (app *appConfig) addUser(w http.ResponseWriter, r *http.Request){
 	}
 
 	responseData := jsonResponse{
-		Error: false,
+		Error:   false,
 		Message: "user created",
 		Data: struct {
-			JwtToken string `json:"jwtToken"`
+			JwtToken     string `json:"jwtToken"`
 			RefreshToken string `json:"refreshToken"`
-			UType string `json:"uType"`
-			Email string `json:"email"`
+			UType        string `json:"uType"`
+			Email        string `json:"email"`
 		}{
-			JwtToken: token,
+			JwtToken:     token,
 			RefreshToken: refresh_token,
-			UType: "user",
-			Email: email,
+			UType:        "user",
+			Email:        email,
 		},
 	}
 	byteData, err := json.Marshal(responseData)
@@ -420,7 +442,7 @@ func (app *appConfig) getInvites(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *appConfig) addContent(w http.ResponseWriter, r *http.Request) {
-	content := struct{
+	content := struct {
 		Name string `json:"name"`
 	}{}
 	err, statusCode := app.readJSON(w, r, &content)
@@ -440,9 +462,22 @@ func (app *appConfig) addContent(w http.ResponseWriter, r *http.Request) {
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "added"})
 }
 
-func (app *appConfig) getContent (w http.ResponseWriter, r *http.Request){
+func (app *appConfig) getContent(w http.ResponseWriter, r *http.Request) {
+	if parsedUserData.UType == "owner" {
+		contentList, err := app.DB.GetContentList(parsedUserData.Id)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		app.writeJSON(w, http.StatusAccepted, jsonResponse{Error: false, Message: "heres your list", Data: contentList})
 
+	} else {
+		contentId := r.URL.Query().Get("id")
+		if contentId == "" {
+			app.errorJSON(w, errors.New("must provide a id to get a content"), http.StatusBadRequest)
+		}
 
+	}
 }
 
 func (app *appConfig) uploadVideo(w http.ResponseWriter, r *http.Request) {
@@ -535,8 +570,8 @@ func (app *appConfig) putSignedUrl(w http.ResponseWriter, r *http.Request) {
 	app.writeJSON(w, http.StatusAccepted, response)
 }
 
-func (app *appConfig) getProfile(w http.ResponseWriter, r *http.Request){
-	if parsedUserData.UType == "owner"{
+func (app *appConfig) getProfile(w http.ResponseWriter, r *http.Request) {
+	if parsedUserData.UType == "owner" {
 		user, err := app.DB.GetOwnerProfile(parsedUserData.Email)
 		fmt.Println("-------------------")
 		fmt.Println(user)
@@ -545,10 +580,49 @@ func (app *appConfig) getProfile(w http.ResponseWriter, r *http.Request){
 			return
 		}
 		response := jsonResponse{
-			Error: false,
+			Error:   false,
 			Message: "success",
-			Data: user,
+			Data:    user,
 		}
 		app.writeJSON(w, http.StatusOK, response)
 	}
+}
+
+func (app *appConfig) getTeams(w http.ResponseWriter, r *http.Request) {
+	teamsList, err := app.DB.GetTeams(parsedUserData.Id)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+	response := jsonResponse{
+		Error:   false,
+		Message: "heres the list",
+		Data:    teamsList,
+	}
+	app.writeJSON(w, http.StatusOK, response)
+}
+
+func (app *appConfig) createContent(w http.ResponseWriter, r *http.Request) {
+	if parsedUserData.UType != "owner" {
+		app.errorJSON(w, errors.New("only owners can create content"), http.StatusBadRequest)
+		return
+	}
+	content := struct {
+		Name string `json:"name"`
+	}{}
+	err, statusCode := app.readJSON(w, r, &content)
+	if err != nil {
+		app.errorJSON(w, err, statusCode)
+		return
+	}
+	err = app.DB.CreateContent(content.Name, parsedUserData.Id)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	response := jsonResponse{
+		Error:   false,
+		Message: "content created",
+	}
+	app.writeJSON(w, http.StatusCreated, response)
 }

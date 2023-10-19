@@ -21,7 +21,7 @@ func (pDB *PostgreDB) Connection() *sql.DB {
 }
 
 type TIdEmailPassword struct {
-	Id       int64    `json:"id"`
+	Id       int64  `json:"id"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	UType    string `json:"utype"`
@@ -86,7 +86,6 @@ func (pDB *PostgreDB) AddOwner(owner AddOwner) (int64, error) {
 		return 0, err
 	}
 	return id, nil
-
 }
 
 func (pDB *PostgreDB) AddUser(user AddUser) (int64, error) {
@@ -180,8 +179,8 @@ func (pDB *PostgreDB) DeleteInviteAndAddToTeam(sender, receiver int64, role stri
 }
 
 type Invites struct {
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	Email       string `json:"email"`
+	Role        string `json:"role"`
 	ChannelName string `json:"channelName"`
 }
 
@@ -207,14 +206,13 @@ func (pDB *PostgreDB) GetAllInvites(id int64, utype string) ([]Invites, error) {
 	}
 	for rows.Next() {
 		invite := Invites{}
-		if utype == "owner"{
+		if utype == "owner" {
 			rows.Scan(&invite.Email, &invite.Role)
-		} else if utype == "user"{
+		} else if utype == "user" {
 			rows.Scan(&invite.Email, &invite.ChannelName, &invite.Role)
 		}
 		list = append(list, invite)
 	}
-	fmt.Println(list)
 	return list, nil
 }
 
@@ -237,7 +235,7 @@ type OwnerProfile struct {
 	ProfileImage string `json:"profileImage"`
 	Title        string `json:"title"`
 	ChannelUrl   string `json:"channelUrl"`
-	Description   string `json:"description"`
+	Description  string `json:"description"`
 }
 
 func (pDB *PostgreDB) GetOwnerProfile(email string) (*OwnerProfile, error) {
@@ -260,4 +258,78 @@ func (pDB *PostgreDB) GetOwnerProfile(email string) (*OwnerProfile, error) {
 		}
 	}
 	return u, nil
+}
+
+type teamDetailsLite struct {
+	ChannelName  string `json:"channelName"`
+	ProfileImage string `json:"profileImage"`
+	OwnerId      string `json:"ownerId"`
+}
+
+func (pDB *PostgreDB) GetTeams(userId int64) (*[]teamDetailsLite, error) {
+	query := fmt.Sprintf(
+		"select owners.channelname, owners.profileimage, owners.id from teams inner join owners on teams.owner = owners.id where teams.member = %d",
+		userId,
+	)
+
+	rows, err := pDB.PDB.QueryContext(context.Background(), query)
+	defer rows.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	teamDetLiteList := []teamDetailsLite{}
+	for rows.Next() {
+		teamDetLite := teamDetailsLite{}
+		rows.Scan(&teamDetLite.ChannelName, &teamDetLite.ProfileImage, &teamDetLite.OwnerId)
+		teamDetLiteList = append(teamDetLiteList, teamDetLite)
+	}
+	fmt.Println(teamDetLiteList)
+	return &teamDetLiteList, nil
+}
+
+func (pDB *PostgreDB) CreateContent(name string, ownerId int64) error {
+	query := fmt.Sprintf("insert into contents(projectname, owner) values('%s', %d)", name, ownerId)
+	if _, err := pDB.PDB.ExecContext(context.Background(), query); err != nil {
+		return err
+	}
+	return nil
+}
+
+type Content struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+}
+
+func (pDB *PostgreDB) GetContentList(ownerId int64) (*[]Content, error){
+	contentList := new([]Content)
+	query := fmt.Sprintf("select id, projectname from contents where owner = %d", ownerId)
+	rows, err := pDB.PDB.QueryContext(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next(){
+		content := new(Content)
+		rows.Scan(&content.Id, &content.Name)
+		*contentList = append(*contentList, *content)
+	}
+	return contentList, nil
+} 
+
+func (pDB *PostgreDB) GetEmailFromOwner(email string) (bool, int64, error) {
+	query := fmt.Sprintf("select email,id from owners where email = '%s'", email)
+
+	emailInDB := ""
+	var idInDb int64
+	row := pDB.PDB.QueryRowContext(context.Background(), query)
+	err := row.Scan(&emailInDB, &idInDb)
+	if err != nil {
+		switch err {
+		case sql.ErrNoRows:
+			return false, -1, nil
+		default:
+			return false, -1, err
+		}
+	}
+	return true,idInDb, nil
 }
