@@ -647,3 +647,10 @@ func (app *appConfig) createContent(w http.ResponseWriter, r *http.Request) {
 	app.writeJSON(w, http.StatusCreated, response)
 }
 
+func (app *appConfig) getContenDetail(w http.ResponseWriter, r *http.Request){
+	if parsedUserData.UType == "owner"{
+
+	}
+
+}
+

@@ -347,3 +347,25 @@ func (pDB *PostgreDB) IsTeamMember(ownerId int64, userId int64) (bool, error){
 	}
 	return true, nil
 }
+
+type contentDetail struct {
+	ProjectName string `json:"projectName"`
+	Title string `json:"title"`
+	Description string `json:"description"`
+	Tags string `json:"tags"`
+	Video string `json:"video"`
+}
+
+func (pDB *PostgreDB) GetContentDetail(contentId int64) (*contentDetail, error){
+	contentDetail := new(contentDetail)
+	query := fmt.Sprintf("select projectname, title, video, description, tags from contents where id = %d", contentId)
+	row := pDB.PDB.QueryRowContext(context.Background(), query)
+	err := row.Scan(&contentDetail.ProjectName, &contentDetail.Title, &contentDetail.Video, &contentDetail.Description, &contentDetail.Tags)
+	if err != nil {
+		switch err {
+		case sql.ErrNoRows: return nil, errors.New("content not found")
+		default: return nil, err
+		}
+	}
+	return contentDetail, nil
+}
