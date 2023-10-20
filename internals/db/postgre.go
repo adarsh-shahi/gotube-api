@@ -333,3 +333,17 @@ func (pDB *PostgreDB) GetEmailFromOwner(email string) (bool, int64, error) {
 	}
 	return true,idInDb, nil
 }
+
+func (pDB *PostgreDB) IsTeamMember(ownerId int64, userId int64) (bool, error){
+	query := fmt.Sprintf("select id from teams where owner = %d AND member = %d", ownerId, userId);
+	row := pDB.PDB.QueryRowContext(context.Background(), query)
+	var id int64
+	err := row.Scan(&id)
+	if err != nil {
+		switch err {
+		case sql.ErrNoRows: return false, nil
+		default: return false, err
+		}
+	}
+	return true, nil
+}

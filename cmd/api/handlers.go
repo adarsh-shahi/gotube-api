@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/adarsh-shahi/gotube-api/internals/db"
@@ -472,10 +473,29 @@ func (app *appConfig) getContent(w http.ResponseWriter, r *http.Request) {
 		app.writeJSON(w, http.StatusAccepted, jsonResponse{Error: false, Message: "heres your list", Data: contentList})
 
 	} else {
-		contentId := r.URL.Query().Get("id")
-		if contentId == "" {
-			app.errorJSON(w, errors.New("must provide a id to get a content"), http.StatusBadRequest)
+		ownerId := r.URL.Query().Get("id")
+		fmt.Println(ownerId)
+		var ownerIdInt int64
+		if id, err := strconv.Atoi(ownerId); err != nil {
+			app.errorJSON(w, errors.New(fmt.Sprintf("%d not accepted must provide a valid id", ownerIdInt)), http.StatusBadRequest)
+			return
+		} else {
+			ownerIdInt = int64(id)
 		}
+		fmt.Println(ownerIdInt)
+		if ok, err := app.DB.IsTeamMember(ownerIdInt, parsedUserData.Id); err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		} else if !ok {
+			app.errorJSON(w, errors.New("you are not a team member"), http.StatusBadRequest)
+			return
+		}
+		contentList, err := app.DB.GetContentList(ownerIdInt)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		app.writeJSON(w, http.StatusAccepted, jsonResponse{Error: false, Message: "heres your list", Data: contentList})
 
 	}
 }
@@ -626,3 +646,4 @@ func (app *appConfig) createContent(w http.ResponseWriter, r *http.Request) {
 	}
 	app.writeJSON(w, http.StatusCreated, response)
 }
+
