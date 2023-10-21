@@ -26,8 +26,10 @@ func (app *appConfig) routes() http.Handler {
 	mux.Post("/content", app.protect(app.addContent))
 
 	// s3 presigned urls
-	mux.Get("/geturl", app.protect(app.getSignedUrl))
-	mux.Get("/puturl", app.protect(app.putSignedUrl))
+	mux.Get("/thumbnail", app.protect(app.getThumbnailSignedUrl))
+	mux.Put("/thumbnail", app.protect(app.putThumbnailSignedUrl))
+	mux.Get("/video", app.protect(app.getVideoSignedUrl))
+	mux.Put("/video", app.protect(app.putVideoSignedUrl))
 
 	mux.Get("/profile", app.protect(app.getProfile))
 
@@ -35,6 +37,7 @@ func (app *appConfig) routes() http.Handler {
 
 	//content
 	mux.Post("/content", app.protect(app.createContent))
-	mux.Get("/content", app.protect(app.getContent))
+	mux.Get("/contents", app.protect(app.getContent))
+	mux.Get("/content", app.protect(app.getContenDetail))
 	return mux
 }
