@@ -7,9 +7,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
+	"os"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type jsonResponse struct {
@@ -119,3 +125,63 @@ func (app *appConfig) generateAccessTokenYT(refreshToken string) (string, error)
 	return accessToken.(string), nil
 }
 
+func (app *appConfig) isValidInt(id string) (int64, error){
+		var ownerIdInt int64
+		if id, err := strconv.Atoi(id); err != nil {
+			return ownerIdInt, errors.New(fmt.Sprintf("%d not accepted must provide a valid id", ownerIdInt))
+		} else {
+			ownerIdInt = int64(id)
+		}
+	return ownerIdInt, nil
+}
+
+func (app *appConfig) getSignedUrl(key string) (string, error){
+	var urlStr string
+	creds := credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), "")
+
+	cfg := aws.NewConfig().WithRegion(os.Getenv("AWS_REGION")).WithCredentials(creds)
+
+	sess, err := session.NewSession(cfg)
+	if err != nil {
+		return urlStr, err
+	}
+
+	svc := s3.New(sess)
+
+	req, _ := svc.GetObjectRequest(&s3.GetObjectInput{
+		Bucket: aws.String("gotube.adarsh"),
+		Key:    aws.String(key),
+	})
+
+	urlStr, err = req.Presign(1 * time.Minute)
+	if err != nil {
+		return urlStr, err
+	}
+
+	return urlStr, nil
+}
+func (app *appConfig) putSignedUrl(key string) (string, error) {
+	var urlStr string
+	creds := credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), "")
+
+	cfg := aws.NewConfig().WithRegion(os.Getenv("AWS_REGION")).WithCredentials(creds)
+
+	sess, err := session.NewSession(cfg)
+	if err != nil {
+		return urlStr, err
+	}
+
+	svc := s3.New(sess)
+
+	req, _ := svc.PutObjectRequest(&s3.PutObjectInput{
+		Bucket: aws.String("gotube.adarsh"),
+		Key:    aws.String(key),
+	})
+
+	urlStr, err = req.Presign(2 * time.Minute)
+	if err != nil {
+		return urlStr, err
+	}
+
+	return urlStr, nil
+}

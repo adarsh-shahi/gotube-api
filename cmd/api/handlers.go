@@ -5,21 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
-	"strconv"
-	"time"
 
 	"github.com/adarsh-shahi/gotube-api/internals/db"
 	"github.com/adarsh-shahi/gotube-api/internals/youtube"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -475,12 +467,10 @@ func (app *appConfig) getContent(w http.ResponseWriter, r *http.Request) {
 	} else {
 		ownerId := r.URL.Query().Get("id")
 		fmt.Println(ownerId)
-		var ownerIdInt int64
-		if id, err := strconv.Atoi(ownerId); err != nil {
-			app.errorJSON(w, errors.New(fmt.Sprintf("%d not accepted must provide a valid id", ownerIdInt)), http.StatusBadRequest)
+		ownerIdInt, err := app.isValidInt(ownerId)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusBadRequest)
 			return
-		} else {
-			ownerIdInt = int64(id)
 		}
 		fmt.Println(ownerIdInt)
 		if ok, err := app.DB.IsTeamMember(ownerIdInt, parsedUserData.Id); err != nil {
@@ -500,94 +490,134 @@ func (app *appConfig) getContent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (app *appConfig) uploadVideo(w http.ResponseWriter, r *http.Request) {
-	file, handler, err := r.FormFile("image")
-	if err != nil {
-		app.errorJSON(w, errors.New("error retrieving the file"), http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	extension := filepath.Ext(handler.Filename)
-	newFileName := "uploaded_image" + extension
-
-	outputFile, err := os.Create(newFileName)
-	if err != nil {
-		app.errorJSON(w, errors.New("error creating the file"), http.StatusBadRequest)
-		return
-	}
-	defer outputFile.Close()
-
-	_, err = io.Copy(outputFile, file)
-	if err != nil {
-		app.errorJSON(w, errors.New("error copying the file"), http.StatusBadRequest)
-		return
-	}
-	w.Write([]byte("hello there"))
+//	func (app *appConfig) uploadVideo(w http.ResponseWriter, r *http.Request) {
+//		file, handler, err := r.FormFile("image")
+//		if err != nil {
+//			app.errorJSON(w, errors.New("error retrieving the file"), http.StatusBadRequest)
+//			return
+//		}
+//		defer file.Close()
+//
+//		extension := filepath.Ext(handler.Filename)
+//		newFileName := "uploaded_image" + extension
+//
+//		outputFile, err := os.Create(newFileName)
+//		if err != nil {
+//			app.errorJSON(w, errors.New("error creating the file"), http.StatusBadRequest)
+//			return
+//		}
+//		defer outputFile.Close()
+//
+//		_, err = io.Copy(outputFile, file)
+//		if err != nil {
+//			app.errorJSON(w, errors.New("error copying the file"), http.StatusBadRequest)
+//			return
+//		}
+//		w.Write([]byte("hello there"))
+//	}
+type fileMetaData struct {
+	Size     int `json:"size"`
+	Type string `json:"type"`
 }
 
-func (app *appConfig) getSignedUrl(w http.ResponseWriter, r *http.Request) {
-	creds := credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), "")
-
-	cfg := aws.NewConfig().WithRegion(os.Getenv("AWS_REGION")).WithCredentials(creds)
-
-	sess, err := session.NewSession(cfg)
-	if err != nil {
-		app.errorJSON(w, err, http.StatusInternalServerError)
-		return
-	}
-
-	svc := s3.New(sess)
-
-	req, _ := svc.GetObjectRequest(&s3.GetObjectInput{
-		Bucket: aws.String("gotube.adarsh"),
-		Key:    aws.String("memes/setup.jpg"),
-	})
-
-	urlStr, err := req.Presign(1 * time.Minute)
-	if err != nil {
-		app.errorJSON(w, err, http.StatusInternalServerError)
-		return
-	}
-
-	response := jsonResponse{
-		Error: false,
-		Data:  urlStr,
-	}
-
-	app.writeJSON(w, http.StatusAccepted, response)
+var videoTypes = map[string]bool{
+	"mp4": true,
+	"mov": true,
 }
 
-func (app *appConfig) putSignedUrl(w http.ResponseWriter, r *http.Request) {
-	creds := credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), "")
+func (app *appConfig) getVideoSignedUrl(w http.ResponseWriter, r *http.Request) {
+}
 
-	cfg := aws.NewConfig().WithRegion(os.Getenv("AWS_REGION")).WithCredentials(creds)
+func (app *appConfig) putVideoSignedUrl(w http.ResponseWriter, r *http.Request) {
 
-	sess, err := session.NewSession(cfg)
+	// handling query params
+	contentIdStr := r.URL.Query().Get("contentId")
+	contentId, err := app.isValidInt(contentIdStr)
+	if err != nil {
+		app.errorJSON(w, errors.New("content id type should of type int"), http.StatusBadRequest)
+		return
+	}
+
+	//read json
+	fileMetaData := new(fileMetaData)
+	err, statusCode := app.readJSON(w, r, fileMetaData)
+	if err != nil {
+		app.errorJSON(w, err, statusCode)
+		return
+	}
+
+	// meta data validation (this validation also happens at client side but i dont trust them)
+	if(!(fileMetaData.Size <= 1024 * 1024 * 1024 * 1)){ // 1 GB max size (in bytes)
+		app.errorJSON(w, errors.New("max size is of 1GB"), http.StatusBadRequest)
+		return
+	} 
+	if _, ok := videoTypes[fileMetaData.Type]; !ok {
+		app.errorJSON(w, errors.New("file type not supported"), http.StatusBadRequest)
+		return
+	}
+
+
+	// checking authorization (are they authorized to upload ?) based on user types
+	if parsedUserData.UType == "owner" {
+		ok, err := app.DB.IsOwnersContent(contentId, parsedUserData.Id)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			app.errorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
+			return
+		}
+	} else if parsedUserData.UType == "user" {
+		ownerIdStr := r.URL.Query().Get("ownerId")
+		ownerId, err := app.isValidInt(ownerIdStr)
+		if err != nil {
+			app.errorJSON(w, errors.New("content id type should of type int"), http.StatusBadRequest)
+			return
+		}
+		ok, err := app.DB.IsTeamMember(ownerId, parsedUserData.Id)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			app.errorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
+			return
+		}
+		ok, err = app.DB.IsOwnersContent(contentId, ownerId)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			app.errorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
+			return
+		}
+	}
+
+
+	
+	key := "savetothis.jpg"
+	url, err := app.putSignedUrl(key)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
 		return
 	}
 
-	svc := s3.New(sess)
-
-	req, _ := svc.PutObjectRequest(&s3.PutObjectInput{
-		Bucket: aws.String("gotube.adarsh"),
-		Key:    aws.String("cycle/ok.jpg"),
-	})
-
-	urlStr, err := req.Presign(2 * time.Minute)
-	if err != nil {
-		app.errorJSON(w, err, http.StatusInternalServerError)
-		return
+	response := struct {
+		Url string `json:"url"`
+		Key string `json:"key"`
+	}{
+		Url: url,
+		Key: key,
 	}
+	app.writeJSON(w, http.StatusAccepted, jsonResponse{Error: false, Data: response})
+}
 
-	response := jsonResponse{
-		Error: false,
-		Data:  urlStr,
-	}
+func (app *appConfig) getThumbnailSignedUrl(w http.ResponseWriter, r *http.Request) {
+}
 
-	app.writeJSON(w, http.StatusAccepted, response)
+func (app *appConfig) putThumbnailSignedUrl(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *appConfig) getProfile(w http.ResponseWriter, r *http.Request) {
@@ -647,10 +677,51 @@ func (app *appConfig) createContent(w http.ResponseWriter, r *http.Request) {
 	app.writeJSON(w, http.StatusCreated, response)
 }
 
-func (app *appConfig) getContenDetail(w http.ResponseWriter, r *http.Request){
-	if parsedUserData.UType == "owner"{
-
+func (app *appConfig) getContenDetail(w http.ResponseWriter, r *http.Request) {
+	ownerId := r.URL.Query().Get("ownerId")
+	contentId := r.URL.Query().Get("contentId")
+	cId, err := app.isValidInt(contentId)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		return
 	}
 
-}
+	if parsedUserData.UType == "owner" {
+		ok, err := app.DB.IsOwnersContent(cId, parsedUserData.Id)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			app.errorJSON(w, errors.New("Its not your content"), http.StatusUnauthorized)
+		}
+		cd, err := app.DB.GetContentDetail(cId)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		app.writeJSON(w, http.StatusAccepted, jsonResponse{Error: false, Message: "heres your content", Data: cd})
 
+	} else if parsedUserData.UType == "user" {
+		oId, err := app.isValidInt(ownerId)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
+		ok, err := app.DB.IsTeamMember(oId, parsedUserData.Id)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			app.errorJSON(w, errors.New("you are not a team member to access contents"), http.StatusUnauthorized)
+			return
+		}
+		cd, err := app.DB.GetContentDetail(cId)
+		if err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		app.writeJSON(w, http.StatusAccepted, jsonResponse{Error: false, Message: "heres your content", Data: cd})
+	}
+}

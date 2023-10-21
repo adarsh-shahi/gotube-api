@@ -369,3 +369,16 @@ func (pDB *PostgreDB) GetContentDetail(contentId int64) (*contentDetail, error){
 	}
 	return contentDetail, nil
 }
+
+func (pDB *PostgreDB) IsOwnersContent(contentId int64, ownerId int64) (bool, error){
+	query := fmt.Sprintf("select id from contents where id = %d AND owner = %d", contentId, ownerId)
+	var id int64
+	err := pDB.PDB.QueryRowContext(context.Background(), query).Scan(&id)
+	if err != nil {
+		switch err {
+		case sql.ErrNoRows: return false, nil
+		default: return false, err
+		}
+	}
+	return true, nil
+}
