@@ -3,16 +3,12 @@ package main
 import (
 	"database/sql"
 
+	_ "github.com/jackc/pgconn"
 	_ "github.com/jackc/pgx/v4"
 	_ "github.com/jackc/pgx/v4/stdlib"
-	_ "github.com/jackc/pgconn"
 )
 
-
-
-
-
-func (app *appConfig) connectDB() (*sql.DB, error){
+func (app *appConfig) connectDB() (*sql.DB, error) {
 	connection, err := sql.Open("pgx", app.dbConnectionCreds)
 	if err != nil {
 		return nil, err
@@ -23,9 +19,3 @@ func (app *appConfig) connectDB() (*sql.DB, error){
 	}
 	return connection, nil
 }
-
-
-
-
-
-

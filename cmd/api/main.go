@@ -6,15 +6,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/adarsh-shahi/gotube-api/internals/db"
+	"github.com/joho/godotenv"
 )
 
 type appConfig struct {
 	port              string
 	jsonSizeLimit     int
 	dbConnectionCreds string
-	DB *db.PostgreDB
+	DB                *db.PostgreDB
 }
 
 func main() {
@@ -22,10 +22,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	app := appConfig{
 		port:          ":8001",
-		jsonSizeLimit: 1024 * 1024 * 1 , // 1MB
+		jsonSizeLimit: 1024 * 1024 * 1, // 1MB
 		dbConnectionCreds: fmt.Sprintf(
 			"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5",
 			"localhost",

@@ -9,7 +9,7 @@ import (
 func (app *appConfig) routes() http.Handler {
 	mux := chi.NewRouter()
 	mux.Use(app.enableCors)
-	mux.Get("/", app.protect(app.home))
+	mux.Get("/", app.home)
 
 	// Auth
 	mux.Get("/signin/oauth/user", app.authYoutube)

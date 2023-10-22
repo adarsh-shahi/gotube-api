@@ -2,20 +2,22 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
-	"os"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type jsonResponse struct {
@@ -68,12 +70,13 @@ func (app *appConfig) readJSON(w http.ResponseWriter, r *http.Request, data inte
 		case errors.Is(err, io.EOF):
 			return errors.New("Request body must not be empty"), http.StatusBadRequest
 
-		default: return err, http.StatusInternalServerError
+		default:
+			return err, http.StatusInternalServerError
 		}
 	}
 
 	err = dec.Decode(&struct{}{})
-	if !errors.Is(err, io.EOF){
+	if !errors.Is(err, io.EOF) {
 		return errors.New("Request body must contain a single JSON object"), http.StatusBadRequest
 	}
 
@@ -94,12 +97,12 @@ func (app *appConfig) errorJSON(w http.ResponseWriter, err error, status ...int)
 	return app.writeJSON(w, statusCode, resopnse)
 }
 
-func (app *appConfig) generateToken(email, utype string, id int64) (string, error){
+func (app *appConfig) generateToken(email, utype string, id int64) (string, error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"utype": utype,
-		"id": id,
+		"id":    id,
 		"email": email,
-		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
+		"exp":   time.Now().Add(time.Hour * 24 * 30).Unix(),
 	})
 
 	tokenString, err := t.SignedString([]byte("secret"))
@@ -109,7 +112,7 @@ func (app *appConfig) generateToken(email, utype string, id int64) (string, erro
 	return tokenString, nil
 }
 
-func (app *appConfig) generateAccessTokenYT(refreshToken string) (string, error){
+func (app *appConfig) generateAccessTokenYT(refreshToken string) (string, error) {
 	url := `https://www.googleapis.com/oauth2/v4/token`
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer([]byte("")))
 	if err != nil {
@@ -125,17 +128,17 @@ func (app *appConfig) generateAccessTokenYT(refreshToken string) (string, error)
 	return accessToken.(string), nil
 }
 
-func (app *appConfig) isValidInt(id string) (int64, error){
-		var ownerIdInt int64
-		if id, err := strconv.Atoi(id); err != nil {
-			return ownerIdInt, errors.New(fmt.Sprintf("%d not accepted must provide a valid id", ownerIdInt))
-		} else {
-			ownerIdInt = int64(id)
-		}
+func (app *appConfig) isValidInt(id string) (int64, error) {
+	var ownerIdInt int64
+	if id, err := strconv.Atoi(id); err != nil {
+		return ownerIdInt, errors.New(fmt.Sprintf("%d not accepted must provide a valid id", ownerIdInt))
+	} else {
+		ownerIdInt = int64(id)
+	}
 	return ownerIdInt, nil
 }
 
-func (app *appConfig) getSignedUrl(key string) (string, error){
+func (app *appConfig) getSignedUrl(key string) (string, error) {
 	var urlStr string
 	creds := credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), "")
 
@@ -184,4 +187,12 @@ func (app *appConfig) putSignedUrl(key string) (string, error) {
 	}
 
 	return urlStr, nil
+}
+
+func (app *appConfig) randomHex(n int)(string, error){
+	buff := make([]byte, n)
+	if _, err := rand.Read(buff); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buff), nil
 }
