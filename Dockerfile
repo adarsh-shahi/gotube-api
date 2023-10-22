@@ -2,8 +2,12 @@ FROM golang:1.21
 
 WORKDIR /app
 
-COPY ./cmd /app
+COPY . /app
 
-RUN go build -o /app/main
+RUN go fmt ./...
 
-CMD ["/app/main"]
+RUN go vet ./...
+
+RUN go build ./cmd/api
+
+CMD ["./api"]
