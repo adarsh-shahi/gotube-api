@@ -8,6 +8,6 @@ RUN go fmt ./...
 
 RUN go vet ./...
 
-RUN go build -o ./cmd/api
+RUN go build -o main
 
-CMD ["./api"]
+CMD ["./main"]
