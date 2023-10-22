@@ -594,8 +594,6 @@ func (app *appConfig) putVideoSignedUrl(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-
-
 	
 	key := "savetothis.jpg"
 	url, err := app.putSignedUrl(key)
