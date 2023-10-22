@@ -25,7 +25,7 @@ func main() {
 	
 	app := appConfig{
 		port:          ":8001",
-		jsonSizeLimit: 1024*1024 , // 1MB
+		jsonSizeLimit: 1024 * 1024 * 1 , // 1MB
 		dbConnectionCreds: fmt.Sprintf(
 			"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5",
 			"localhost",
