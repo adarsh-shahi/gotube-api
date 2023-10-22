@@ -6,34 +6,35 @@ import (
 	"net/http"
 )
 
-type Channel struct{
-	Title string `json:"name"` 
-	CustomUrl string `json:"username"`
-	Description string `json:"description"`
+type Channel struct {
+	Title           string `json:"name"`
+	CustomUrl       string `json:"username"`
+	Description     string `json:"description"`
 	ProfileImageUrl string `json:"profileImageUrl"`
 }
 type Response struct {
-    Items []struct {
-        Snippet struct {
-            CustomURL string `json:"customUrl"`
-            Description string `json:"description"`
-            Title string `json:"title"`
-			Thumbnails struct {
+	Items []struct {
+		Snippet struct {
+			CustomURL   string `json:"customUrl"`
+			Description string `json:"description"`
+			Title       string `json:"title"`
+			Thumbnails  struct {
 				Medium struct {
 					Url string `json:"url"`
 				}
 			}
-        } `json:"snippet"`
-    } `json:"items"`
+		} `json:"snippet"`
+	} `json:"items"`
 }
+
 const (
 	channelUrl = "https://www.googleapis.com/youtube/v3/channels"
 )
 
-func GetChannelInfo(accessToken string) (*Channel, error){
+func GetChannelInfo(accessToken string) (*Channel, error) {
 
 	client := &http.Client{}
-	req, _ := http.NewRequest("GET",channelUrl+"?mine=true&part=snippet",nil )
+	req, _ := http.NewRequest("GET", channelUrl+"?mine=true&part=snippet", nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 	resp, err := client.Do(req)
 	if err != nil {

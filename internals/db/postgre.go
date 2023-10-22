@@ -297,24 +297,24 @@ func (pDB *PostgreDB) CreateContent(name string, ownerId int64) error {
 }
 
 type Content struct {
-	Id int64 `json:"id"`
+	Id   int64  `json:"id"`
 	Name string `json:"name"`
 }
 
-func (pDB *PostgreDB) GetContentList(ownerId int64) (*[]Content, error){
+func (pDB *PostgreDB) GetContentList(ownerId int64) (*[]Content, error) {
 	contentList := new([]Content)
 	query := fmt.Sprintf("select id, projectname from contents where owner = %d", ownerId)
 	rows, err := pDB.PDB.QueryContext(context.Background(), query)
 	if err != nil {
 		return nil, err
 	}
-	for rows.Next(){
+	for rows.Next() {
 		content := new(Content)
 		rows.Scan(&content.Id, &content.Name)
 		*contentList = append(*contentList, *content)
 	}
 	return contentList, nil
-} 
+}
 
 func (pDB *PostgreDB) GetEmailFromOwner(email string) (bool, int64, error) {
 	query := fmt.Sprintf("select email,id from owners where email = '%s'", email)
@@ -331,18 +331,20 @@ func (pDB *PostgreDB) GetEmailFromOwner(email string) (bool, int64, error) {
 			return false, -1, err
 		}
 	}
-	return true,idInDb, nil
+	return true, idInDb, nil
 }
 
-func (pDB *PostgreDB) IsTeamMember(ownerId int64, userId int64) (bool, error){
-	query := fmt.Sprintf("select id from teams where owner = %d AND member = %d", ownerId, userId);
+func (pDB *PostgreDB) IsTeamMember(ownerId int64, userId int64) (bool, error) {
+	query := fmt.Sprintf("select id from teams where owner = %d AND member = %d", ownerId, userId)
 	row := pDB.PDB.QueryRowContext(context.Background(), query)
 	var id int64
 	err := row.Scan(&id)
 	if err != nil {
 		switch err {
-		case sql.ErrNoRows: return false, nil
-		default: return false, err
+		case sql.ErrNoRows:
+			return false, nil
+		default:
+			return false, err
 		}
 	}
 	return true, nil
@@ -350,34 +352,38 @@ func (pDB *PostgreDB) IsTeamMember(ownerId int64, userId int64) (bool, error){
 
 type contentDetail struct {
 	ProjectName string `json:"projectName"`
-	Title string `json:"title"`
+	Title       string `json:"title"`
 	Description string `json:"description"`
-	Tags string `json:"tags"`
-	Video string `json:"video"`
+	Tags        string `json:"tags"`
+	Video       string `json:"video"`
 }
 
-func (pDB *PostgreDB) GetContentDetail(contentId int64) (*contentDetail, error){
+func (pDB *PostgreDB) GetContentDetail(contentId int64) (*contentDetail, error) {
 	contentDetail := new(contentDetail)
 	query := fmt.Sprintf("select projectname, title, video, description, tags from contents where id = %d", contentId)
 	row := pDB.PDB.QueryRowContext(context.Background(), query)
 	err := row.Scan(&contentDetail.ProjectName, &contentDetail.Title, &contentDetail.Video, &contentDetail.Description, &contentDetail.Tags)
 	if err != nil {
 		switch err {
-		case sql.ErrNoRows: return nil, errors.New("content not found")
-		default: return nil, err
+		case sql.ErrNoRows:
+			return nil, errors.New("content not found")
+		default:
+			return nil, err
 		}
 	}
 	return contentDetail, nil
 }
 
-func (pDB *PostgreDB) IsOwnersContent(contentId int64, ownerId int64) (bool, error){
+func (pDB *PostgreDB) IsOwnersContent(contentId int64, ownerId int64) (bool, error) {
 	query := fmt.Sprintf("select id from contents where id = %d AND owner = %d", contentId, ownerId)
 	var id int64
 	err := pDB.PDB.QueryRowContext(context.Background(), query).Scan(&id)
 	if err != nil {
 		switch err {
-		case sql.ErrNoRows: return false, nil
-		default: return false, err
+		case sql.ErrNoRows:
+			return false, nil
+		default:
+			return false, err
 		}
 	}
 	return true, nil

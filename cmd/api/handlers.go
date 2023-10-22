@@ -516,7 +516,7 @@ func (app *appConfig) getContent(w http.ResponseWriter, r *http.Request) {
 //		w.Write([]byte("hello there"))
 //	}
 type fileMetaData struct {
-	Size     int `json:"size"`
+	Size int    `json:"size"`
 	Type string `json:"type"`
 }
 
@@ -547,15 +547,20 @@ func (app *appConfig) putVideoSignedUrl(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// meta data validation (this validation also happens at client side but i dont trust them)
-	if(!(fileMetaData.Size <= 1024 * 1024 * 1024 * 1)){ // 1 GB max size (in bytes)
+	if !(fileMetaData.Size <= 1024*1024*1024*1) { // 1 GB max size (in bytes)
 		app.errorJSON(w, errors.New("max size is of 1GB"), http.StatusBadRequest)
 		return
-	} 
+	}
 	if _, ok := videoTypes[fileMetaData.Type]; !ok {
 		app.errorJSON(w, errors.New("file type not supported"), http.StatusBadRequest)
 		return
 	}
 
+	key, err := app.randomHex(16)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
 
 	// checking authorization (are they authorized to upload ?) based on user types
 	if parsedUserData.UType == "owner" {
@@ -568,6 +573,7 @@ func (app *appConfig) putVideoSignedUrl(w http.ResponseWriter, r *http.Request) 
 			app.errorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
 			return
 		}
+		key = fmt.Sprintf("%d/%d/%s.%s", parsedUserData.Id, contentId,key, fileMetaData.Type)
 	} else if parsedUserData.UType == "user" {
 		ownerIdStr := r.URL.Query().Get("ownerId")
 		ownerId, err := app.isValidInt(ownerIdStr)
@@ -593,9 +599,9 @@ func (app *appConfig) putVideoSignedUrl(w http.ResponseWriter, r *http.Request) 
 			app.errorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
 			return
 		}
+		key = fmt.Sprintf("%d/%d/%s.%s", ownerId, contentId, key, fileMetaData.Type)
 	}
-	
-	key := "savetothis.jpg"
+
 	url, err := app.putSignedUrl(key)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
